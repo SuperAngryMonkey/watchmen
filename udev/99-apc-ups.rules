@@ -1,0 +1,41 @@
+# /etc/udev/rules.d/99-apc-ups.rules
+#
+# Pin each APC UPS to a stable /dev symlink by serial number so apcupsd
+# instances can find their assigned UPS reliably across reboots and re-plugs.
+#
+# APC vendor ID is 051d. Common product IDs:
+#   0002 = Back-UPS / older Smart-UPS HID
+#   0003 = newer Smart-UPS with Power Device HID
+# Both are handled below by using just the vendor match.
+#
+# To find the serial of each connected UPS, run:
+#   lsusb -v -d 051d: 2>/dev/null | grep -E 'iProduct|iSerial'
+# or use scripts/find-apc-serials.sh
+#
+# Replace the serial strings below with your actual UPS serials, then:
+#   sudo udevadm control --reload && sudo udevadm trigger
+#
+# The symlinks appear at /dev/ups-labN and /dev/usb/ups-labN. apcupsd actually
+# reads via the hiddev layer (kernel usbhid driver), so these symlinks are
+# mainly for your own sanity when running lsusb-style diagnostics. The real
+# pinning happens via the SERIAL attribute match in the apcupsd DEVICE line
+# (see apcupsd-labN.conf).
+
+# UPS #1
+SUBSYSTEM=="usb", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_1", SYMLINK+="ups-lab1", TAG+="systemd", ENV{SYSTEMD_WANTS}="apcupsd@lab1.service"
+
+# UPS #2
+SUBSYSTEM=="usb", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_2", SYMLINK+="ups-lab2", TAG+="systemd", ENV{SYSTEMD_WANTS}="apcupsd@lab2.service"
+
+# UPS #3
+SUBSYSTEM=="usb", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_3", SYMLINK+="ups-lab3", TAG+="systemd", ENV{SYSTEMD_WANTS}="apcupsd@lab3.service"
+
+# UPS #4
+SUBSYSTEM=="usb", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_4", SYMLINK+="ups-lab4", TAG+="systemd", ENV{SYSTEMD_WANTS}="apcupsd@lab4.service"
+
+# Also match the hiddev character device itself so the symlink points at
+# something apcupsd can actually open:
+KERNEL=="hiddev*", SUBSYSTEM=="usbmisc", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_1", SYMLINK+="ups-lab1-hid"
+KERNEL=="hiddev*", SUBSYSTEM=="usbmisc", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_2", SYMLINK+="ups-lab2-hid"
+KERNEL=="hiddev*", SUBSYSTEM=="usbmisc", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_3", SYMLINK+="ups-lab3-hid"
+KERNEL=="hiddev*", SUBSYSTEM=="usbmisc", ATTRS{idVendor}=="051d", ATTRS{serial}=="REPLACE_WITH_SERIAL_4", SYMLINK+="ups-lab4-hid"

@@ -1,0 +1,19 @@
+[Unit]
+Description=APC UPS Power Management Daemon (instance %i)
+Documentation=man:apcupsd(8)
+After=network.target
+Before=shutdown.target
+Conflicts=shutdown.target apcupsd.service
+
+[Service]
+# Type=simple + -b flag (background=no, stay in foreground) plays nicely with
+# systemd's default expectation. The forking variant has PID file timing
+# problems with this version of apcupsd.
+Type=simple
+ExecStart=/sbin/apcupsd -b -f /etc/apcupsd/apcupsd-%i.conf
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=1024
+
+[Install]
+WantedBy=multi-user.target
