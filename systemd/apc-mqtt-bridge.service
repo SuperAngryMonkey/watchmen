@@ -1,0 +1,25 @@
+[Unit]
+Description=APC UPS → MQTT Bridge
+After=network.target mosquitto.service apcupsd@lab1.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/apc-mqtt-bridge.py
+Restart=always
+RestartSec=10
+User=nobody
+Group=nogroup
+
+# Environment — override these for your setup
+Environment=MQTT_HOST=127.0.0.1
+Environment=MQTT_PORT=1883
+Environment=MQTT_TOPIC_PREFIX=ups
+Environment=POLL_INTERVAL=30
+# Default to a single lab instance. Override with `systemctl edit apc-mqtt-bridge`
+# to add more, e.g.:
+#   Environment=UPS_HOSTS=lab1@127.0.0.1:3551,lab2@127.0.0.1:3552
+Environment=UPS_HOSTS=lab1@127.0.0.1:3551
+
+[Install]
+WantedBy=multi-user.target
