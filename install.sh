@@ -53,10 +53,10 @@ install -d /etc/mosquitto/conf.d
 install -m 0644 "$HERE/mosquitto/websockets.conf" /etc/mosquitto/conf.d/
 
 echo "==> Installing web dashboard..."
-install -d /var/lib/gorilla-web
-install -m 0644 "$HERE/web/index.html"        /var/lib/gorilla-web/
-install -m 0644 "$HERE/web/monkey-theme.css"  /var/lib/gorilla-web/
-install -m 0644 "$HERE/systemd/gorilla-web.service" /etc/systemd/system/
+install -d /var/lib/watchmen-web
+install -m 0644 "$HERE/web/index.html"        /var/lib/watchmen-web/
+install -m 0644 "$HERE/web/monkey-theme.css"  /var/lib/watchmen-web/
+install -m 0644 "$HERE/systemd/watchmen-web.service" /etc/systemd/system/
 
 echo "==> Enabling + restarting mosquitto..."
 systemctl enable --now mosquitto
@@ -88,7 +88,7 @@ echo "        apcaccess -h 127.0.0.1:3551"
 echo "        apcaccess -h 127.0.0.1:3552"
 echo
 echo "  6. Start the MQTT bridge and web dashboard:"
-echo "        sudo systemctl enable --now apc-mqtt-bridge gorilla-web"
+echo "        sudo systemctl enable --now apc-mqtt-bridge watchmen-web"
 echo
 echo "  7. Watch the traffic:"
 echo "        mosquitto_sub -h localhost -t 'ups/#' -v"

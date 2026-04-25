@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.2.1 — 2026-04-25 — Renamed to `watchmen`
+
+Rebranded from `gorilla-power` to `watchmen`. Functionally identical to v0.2.0;
+just a name change.
+
+### What changed
+
+- Repo name: `gorilla-power` → `watchmen`
+- Dashboard wordmark: `GORILLA` → `WATCHMEN`
+- Web service: `gorilla-web.service` → `watchmen-web.service`
+- Install path: `/var/lib/gorilla-web/` → `/var/lib/watchmen-web/`
+- Browser tab title and JS client ID updated to match
+
+### Migrating an existing v0.2.0 deployment
+
+For Pis already running the old service names:
+
+```bash
+# Stop and disable the old service
+sudo systemctl disable --now gorilla-web
+
+# Re-run the installer (idempotent, drops in new units and paths)
+sudo ./install.sh
+
+# Enable the renamed service
+sudo systemctl enable --now watchmen-web
+
+# Optional cleanup of the old install dir
+sudo rm -rf /var/lib/gorilla-web /etc/systemd/system/gorilla-web.service
+sudo systemctl daemon-reload
+```
+
+The `apc-mqtt-bridge` and `apcupsd@labN` services are unchanged.
+
 ## v0.2.0 — 2026-04-25 — First successful field deployment
 
 First end-to-end working deployment on APCpi (Raspberry Pi 3B, Pi OS Lite Bookworm)
@@ -49,7 +83,7 @@ Better field coverage than predicted — `NOMPOWER` and `BATTV` both present.
 
 - `apc-mqtt-bridge.service` runs as `nobody` user — systemd warns
   "Special user nobody configured, this is not safe!" Functional but should
-  be moved to a dedicated `gorilla` system user in v0.3.
+  be moved to a dedicated `watchmen` system user in v0.3.
 
 ### Next steps tracked
 
@@ -64,7 +98,7 @@ Initial project scaffold:
 - 4x apcupsd instances per Pi (NIS ports 3551-3554)
 - Python MQTT bridge (native NIS protocol, no apcaccess subprocess)
 - Mosquitto with WebSocket listener on 9001
-- GORILLA dashboard (Monkey Theme, single-page HTML)
+- WATCHMEN dashboard (Monkey Theme, single-page HTML)
 - udev rules for serial-pinning UPSs
 - find-apc-serials and characterize.sh helper scripts
 - One-shot install.sh and remote deploy.sh

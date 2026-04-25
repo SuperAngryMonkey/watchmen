@@ -1,9 +1,9 @@
-# gorilla-power
+# watchmen
 
 APC UPS monitoring stack for Raspberry Pi. Polls UPSs over USB-HID, publishes
 metrics to MQTT, renders a live ops-grade dashboard in the browser.
 
-Built for 800 Pound Gorilla Inc. as a lab characterization bench and the
+UPS monitoring stack designed as a lab characterization bench and the
 foundation for customer-site UPS monitoring deployments.
 
 ## What it does
@@ -32,8 +32,8 @@ foundation for customer-site UPS monitoring deployments.
 
 ```bash
 # On a fresh Raspberry Pi OS Lite (Bookworm or Trixie):
-git clone https://github.com/SuperAngryMonkey/gorilla-power.git
-cd gorilla-power
+git clone https://github.com/SuperAngryMonkey/watchmen.git
+cd watchmen
 sudo ./install.sh
 
 # Find your UPS's serial number
@@ -44,7 +44,7 @@ sudo nano /etc/udev/rules.d/99-apc-ups.rules
 sudo udevadm control --reload && sudo udevadm trigger
 
 # Start the daemons (one per UPS you have plugged in)
-sudo systemctl enable --now apcupsd@lab1 apc-mqtt-bridge gorilla-web
+sudo systemctl enable --now apcupsd@lab1 apc-mqtt-bridge watchmen-web
 
 # Verify
 apcaccess -h 127.0.0.1:3551
@@ -65,14 +65,14 @@ on it:
 ## Repo layout
 
 ```
-gorilla-power/
+watchmen/
 ├── install.sh                       installer for a Pi
 ├── deploy.sh                        push from laptop to a remote Pi
 ├── apcupsd/apcupsd-lab{1..4}.conf   per-instance daemon configs
 ├── systemd/
 │   ├── apcupsd@.service             template unit, one instance per UPS
 │   ├── apc-mqtt-bridge.service      bridge service
-│   └── gorilla-web.service          dashboard HTTP server
+│   └── watchmen-web.service          dashboard HTTP server
 ├── bridge/apc-mqtt-bridge.py        Python MQTT bridge
 ├── web/
 │   ├── index.html                   dashboard
@@ -119,7 +119,7 @@ learned along the way.
 - [ ] Phase 3: Bridge to ChirpStack Mosquitto over Tailscale
 - [ ] Phase 4: RAK4631 + LoRaWAN node variant for remote sites
 - [ ] Phase 5: SQLite logger for 24h sparkline backfill
-- [ ] Move bridge service off `nobody` user to dedicated `gorilla` user
+- [ ] Move bridge service off `nobody` user to dedicated `watchmen` user
 
 ## License
 

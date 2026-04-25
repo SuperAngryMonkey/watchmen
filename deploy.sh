@@ -54,7 +54,7 @@ echo "  sudo find-apc-serials"
 echo "  sudo nano /etc/udev/rules.d/99-apc-ups.rules   # paste serials"
 echo "  sudo udevadm control --reload && sudo udevadm trigger"
 echo "  sudo systemctl enable --now apcupsd@lab1 apcupsd@lab2 apcupsd@lab3 apcupsd@lab4"
-echo "  sudo systemctl enable --now apc-mqtt-bridge gorilla-web"
+echo "  sudo systemctl enable --now apc-mqtt-bridge watchmen-web"
 echo
 echo "Then open the dashboard:"
 echo "  http://${PI_HOST}:8080/"

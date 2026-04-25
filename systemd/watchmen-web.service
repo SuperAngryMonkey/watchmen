@@ -1,11 +1,11 @@
 [Unit]
-Description=GORILLA Power Monitor — Web Dashboard
+Description=WATCHMEN Power Monitor — Web Dashboard
 After=network.target mosquitto.service
 Wants=mosquitto.service
 
 [Service]
 Type=simple
-WorkingDirectory=/var/lib/gorilla-web
+WorkingDirectory=/var/lib/watchmen-web
 ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0
 Restart=always
 RestartSec=5

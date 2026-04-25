@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GORILLA // Power Monitor</title>
+<title>WATCHMEN // Power Monitor</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
@@ -102,10 +102,10 @@
      ================================================================ -->
 <div class="hdr">
   <div class="hdr-left">
-    <div class="logo">GORILLA</div>
+    <div class="logo">WATCHMEN</div>
     <div>
       <div class="subtitle">Power Monitor // APC UPS Fleet</div>
-      <div class="subtitle" style="margin-top:3px;color:var(--txt3)">800 Pound Gorilla Inc. — Lab</div>
+      <div class="subtitle" style="margin-top:3px;color:var(--txt3)">UPS Fleet // Lab</div>
     </div>
   </div>
   <div class="hdr-right">
@@ -217,7 +217,7 @@
 
 <script>
 /* =======================================================================
-   GORILLA Power Monitor — client
+   WATCHMEN Power Monitor — client
    Subscribes to Mosquitto over WebSocket, renders UPS state live.
    ======================================================================= */
 
@@ -537,7 +537,7 @@ function refreshSummary() {
 
 /* ---------- MQTT wiring --------------------------------------------- */
 function connect() {
-  const clientId = 'gorilla-web-' + Math.random().toString(36).slice(2, 10);
+  const clientId = 'watchmen-web-' + Math.random().toString(36).slice(2, 10);
   const client = new Paho.MQTT.Client(CONFIG.broker, CONFIG.port, '/mqtt', clientId);
   state.client = client;
 
