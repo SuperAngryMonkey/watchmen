@@ -1,0 +1,16 @@
+[Unit]
+Description=GORILLA Power Monitor — Web Dashboard
+After=network.target mosquitto.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/lib/gorilla-web
+ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0
+Restart=always
+RestartSec=5
+User=nobody
+Group=nogroup
+
+[Install]
+WantedBy=multi-user.target

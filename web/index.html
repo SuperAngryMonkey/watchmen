@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GORILLA // Power Monitor</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Bebas+Neue&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="monkey-theme.css">
+
+<!-- Paho MQTT over WebSockets -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+
+<style>
+  /* Local additions that extend the theme WITHOUT changing it.
+     Everything here uses Monkey Theme tokens. */
+
+  /* Fleet grid of UPS panels — like .grid2 but auto-fit */
+  .ups-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  /* Emphasize panels in alert states using existing accents */
+  .panel.alert-batt  { border-color: var(--acc2); }
+  .panel.alert-low   { border-color: var(--danger); animation: flicker 1.2s infinite; }
+  .panel.stale       { opacity: 0.5; }
+
+  @keyframes flicker {
+    0%, 100%   { border-color: var(--danger); }
+    50%        { border-color: rgba(255, 51, 102, 0.3); }
+  }
+
+  /* Sparkline canvas sits cleanly inside a panel */
+  .spark-wrap {
+    position: relative;
+    height: 52px;
+    margin-top: 8px;
+    background: var(--c3);
+    border: var(--border-subtle);
+  }
+  .spark-wrap canvas { display: block; width: 100%; height: 100%; }
+
+  /* Per-UPS progress bars for battery / load */
+  .bar {
+    position: relative;
+    height: 4px;
+    background: var(--c3);
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    position: absolute; top: 0; left: 0; bottom: 0;
+    width: 0%;
+    transition: width 0.4s ease-out;
+  }
+  .bar-fill.blue   { background: var(--acc);  }
+  .bar-fill.orange { background: var(--acc2); }
+  .bar-fill.green  { background: var(--acc3); }
+  .bar-fill.red    { background: var(--danger); }
+
+  /* Event log rows — dense, log-file feel */
+  .log-scroll {
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--c3);
+    border: var(--border-subtle);
+    padding: 8px 10px;
+    font-size: 10.5px;
+  }
+  .log-row {
+    display: grid;
+    grid-template-columns: 78px 62px 1fr;
+    gap: 10px;
+    padding: 2px 0;
+    color: var(--txt2);
+  }
+  .log-row .t  { color: var(--txt3); }
+  .log-row .n  { color: var(--acc); }
+  .log-row.ok  .m { color: var(--acc3); }
+  .log-row.warn .m { color: var(--acc2); }
+  .log-row.err  .m { color: var(--danger); }
+
+  /* Scrollbar treatment consistent with theme */
+  .log-scroll::-webkit-scrollbar { width: 6px; }
+  .log-scroll::-webkit-scrollbar-track { background: var(--c2); }
+  .log-scroll::-webkit-scrollbar-thumb { background: var(--txt3); }
+
+  /* Tiny helpers that match the theme's tone */
+  .muted { color: var(--txt3); }
+  .tabular { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+     ================================================================ -->
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="logo">GORILLA</div>
+    <div>
+      <div class="subtitle">Power Monitor // APC UPS Fleet</div>
+      <div class="subtitle" style="margin-top:3px;color:var(--txt3)">800 Pound Gorilla Inc. — Lab</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="status-dot" id="conn-dot"></div>
+      <span class="status-txt" id="conn-txt">CONNECTING</span>
+    </div>
+    <div class="clock" id="clk">--:--:--</div>
+  </div>
+</div>
+
+<!-- ================================================================
+     FLEET SUMMARY — 4 metric cards
+     ================================================================ -->
+<div class="metrics">
+  <div class="metric blue">
+    <div class="metric-label">Units reporting</div>
+    <div class="metric-val" id="m-count">0</div>
+    <div class="metric-sub">across lab bench</div>
+  </div>
+  <div class="metric green">
+    <div class="metric-label">Online</div>
+    <div class="metric-val" id="m-online">0</div>
+    <div class="metric-sub">utility power nominal</div>
+  </div>
+  <div class="metric orange">
+    <div class="metric-label">On battery</div>
+    <div class="metric-val" id="m-onbatt">0</div>
+    <div class="metric-sub">discharge in progress</div>
+  </div>
+  <div class="metric red">
+    <div class="metric-label">Alert state</div>
+    <div class="metric-val" id="m-alert">0</div>
+    <div class="metric-sub">low battery / comm lost</div>
+  </div>
+</div>
+
+<!-- ================================================================
+     SYSTEM STRIP
+     ================================================================ -->
+<div class="fg">
+  <div class="panel-hdr">
+    <span class="panel-title">Monitoring Host</span>
+    <span class="panel-badge live" id="host-badge">ONLINE</span>
+  </div>
+  <div class="fg-grid">
+    <div class="fg-item"><span class="fg-key">host</span><span class="fg-val acc" id="h-host">–</span></div>
+    <div class="fg-item"><span class="fg-key">broker</span><span class="fg-val" id="h-broker">–</span></div>
+    <div class="fg-item"><span class="fg-key">topic</span><span class="fg-val" id="h-topic">ups/#</span></div>
+    <div class="fg-item"><span class="fg-key">last msg</span><span class="fg-val tabular" id="h-lastmsg">–</span></div>
+    <div class="fg-item"><span class="fg-key">msgs/min</span><span class="fg-val tabular" id="h-rate">0</span></div>
+    <div class="fg-item"><span class="fg-key">uptime</span><span class="fg-val tabular" id="h-uptime">0s</span></div>
+  </div>
+</div>
+
+<!-- ================================================================
+     UPS FLEET GRID — one panel per UPS, built dynamically
+     ================================================================ -->
+<div class="ups-grid" id="ups-grid">
+  <!-- Placeholder until first message arrives -->
+  <div class="panel" id="empty-state">
+    <div class="panel-hdr">
+      <span class="panel-title">Waiting for data</span>
+      <span class="panel-badge warn">STANDBY</span>
+    </div>
+    <div style="color:var(--txt2);font-size:11px;line-height:1.6">
+      No UPS telemetry yet. Check that:
+      <br>&nbsp;&nbsp;• <span class="muted">mosquitto</span> is running and WebSocket listener is on port <span style="color:var(--acc)">9001</span>
+      <br>&nbsp;&nbsp;• <span class="muted">apc-mqtt-bridge.service</span> is active
+      <br>&nbsp;&nbsp;• at least one <span class="muted">apcupsd@labN</span> instance is talking to a UPS
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     EVENT LOG + COMMAND INTERFACE
+     ================================================================ -->
+<div class="grid2">
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="panel-title">Event Log</span>
+      <span class="panel-badge live" id="log-badge">STREAMING</span>
+    </div>
+    <div class="log-scroll" id="log">
+      <div class="log-row"><span class="t">--:--:--</span><span class="n">system</span><span class="m muted">waiting for first event...</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="panel-title">Lab Command</span>
+      <span class="panel-badge live">READY</span>
+    </div>
+    <div style="color:var(--txt2);font-size:10.5px;line-height:1.6">
+      Inject simulated events for dashboard testing without pulling plugs.
+      <br><span class="muted">Commands:</span>
+      <span class="acc" style="color:var(--acc)">sim labN onbatt</span> ·
+      <span class="acc" style="color:var(--acc)">sim labN online</span> ·
+      <span class="acc" style="color:var(--acc)">sim labN lowbatt</span> ·
+      <span class="acc" style="color:var(--acc)">clear</span>
+    </div>
+    <div class="input-row">
+      <input class="cmd-input" id="cmd" placeholder='e.g. "sim lab1 onbatt"' autocomplete="off">
+      <button class="cmd-btn" id="cmd-btn">Send ↗</button>
+    </div>
+    <div class="cmd-out" id="cmd-out">Ready.</div>
+  </div>
+</div>
+
+<script>
+/* =======================================================================
+   GORILLA Power Monitor — client
+   Subscribes to Mosquitto over WebSocket, renders UPS state live.
+   ======================================================================= */
+
+const CONFIG = {
+  // Default broker is the lab Pi (monkey@<pi-lan-ip>).
+  // When the page is served FROM the Pi, location.hostname wins and we
+  // connect to whichever host the page came from — works over Tailscale too.
+  // Otherwise fall back to the known-good lab IP.
+  // Override via querystring: ?broker=10.0.0.5&port=9001&prefix=ups
+  broker:  new URLSearchParams(location.search).get('broker') || location.hostname || '<pi-lan-ip>',
+  port:    parseInt(new URLSearchParams(location.search).get('port') || '9001', 10),
+  prefix:  new URLSearchParams(location.search).get('prefix') || 'ups',
+  staleAfterMs: 90 * 1000,   // mark a UPS stale if no update within this
+};
+
+/* ---------- state --------------------------------------------------- */
+const state = {
+  ups: new Map(),        // name -> last payload
+  sparks: new Map(),     // name -> array of recent line_v samples
+  msgCount: 0,
+  msgRate: 0,
+  lastMsgAt: null,
+  connectedAt: null,
+  client: null,
+};
+
+/* ---------- tiny DOM helpers --------------------------------------- */
+const $  = (id) => document.getElementById(id);
+const el = (tag, cls, txt) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (txt !== undefined) n.textContent = txt;
+  return n;
+};
+
+/* ---------- clock / uptime / rate ----------------------------------- */
+function tickClock() {
+  $('clk').textContent = new Date().toTimeString().slice(0, 8);
+
+  if (state.connectedAt) {
+    const s = Math.floor((Date.now() - state.connectedAt) / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    $('h-uptime').textContent = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  // Rate: msgs in the last 60s. We keep a cheap decaying count.
+  state.msgRate = Math.max(0, state.msgRate - state.msgRate / 60);
+  $('h-rate').textContent = Math.round(state.msgRate);
+
+  // Mark stale UPSs
+  for (const [name, data] of state.ups) {
+    if (Date.now() - data._received > CONFIG.staleAfterMs) {
+      const panel = document.querySelector(`[data-ups="${name}"]`);
+      if (panel) panel.classList.add('stale');
+    }
+  }
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+/* ---------- logging ------------------------------------------------- */
+function logLine(name, msg, cls) {
+  const logEl = $('log');
+  const row = el('div', 'log-row' + (cls ? ' ' + cls : ''));
+  row.append(
+    el('span', 't', new Date().toTimeString().slice(0, 8)),
+    el('span', 'n', name || 'system'),
+    el('span', 'm', msg)
+  );
+  logEl.prepend(row);
+  // Trim to 200 lines
+  while (logEl.childElementCount > 200) logEl.lastChild.remove();
+}
+
+/* ---------- connection dot ------------------------------------------ */
+function setConn(state_, label) {
+  const dot = $('conn-dot');
+  const txt = $('conn-txt');
+  txt.textContent = label;
+
+  if (state_ === 'up') {
+    dot.style.background = 'var(--acc3)';
+    dot.style.boxShadow = '0 0 8px var(--acc3)';
+    txt.style.color = 'var(--acc3)';
+  } else if (state_ === 'down') {
+    dot.style.background = 'var(--danger)';
+    dot.style.boxShadow = '0 0 8px var(--danger)';
+    txt.style.color = 'var(--danger)';
+  } else {
+    dot.style.background = 'var(--acc2)';
+    dot.style.boxShadow = '0 0 8px var(--acc2)';
+    txt.style.color = 'var(--acc2)';
+  }
+}
+
+/* ---------- UPS panel rendering ------------------------------------- */
+/* Builds the DOM skeleton once per UPS; subsequent updates mutate fields in place. */
+
+function ensurePanel(name) {
+  let panel = document.querySelector(`[data-ups="${name}"]`);
+  if (panel) return panel;
+
+  // First message from this UPS — hide the empty state
+  const empty = $('empty-state');
+  if (empty) empty.remove();
+
+  panel = el('div', 'panel');
+  panel.dataset.ups = name;
+
+  panel.innerHTML = `
+    <div class="panel-hdr">
+      <span class="panel-title" data-field="title">${escapeHtml(name.toUpperCase())}</span>
+      <span class="panel-badge live" data-field="status-badge">--</span>
+    </div>
+
+    <div class="fg-grid" style="grid-template-columns:repeat(3,1fr);margin-top:0;margin-bottom:12px">
+      <div class="fg-item"><span class="fg-key">model</span><span class="fg-val" data-field="model">–</span></div>
+      <div class="fg-item"><span class="fg-key">serial</span><span class="fg-val" data-field="serial">–</span></div>
+      <div class="fg-item"><span class="fg-key">firmware</span><span class="fg-val" data-field="firmware">–</span></div>
+    </div>
+
+    <div class="fg-grid" style="grid-template-columns:repeat(4,1fr);margin-top:0;margin-bottom:12px">
+      <div class="fg-item">
+        <span class="fg-key">Line V</span>
+        <span class="fg-val acc tabular" data-field="line_v" style="font-family:var(--fdisplay);font-size:22px;letter-spacing:1px">–</span>
+      </div>
+      <div class="fg-item">
+        <span class="fg-key">Load</span>
+        <span class="fg-val tabular" data-field="load_pct" style="font-family:var(--fdisplay);font-size:22px;letter-spacing:1px;color:var(--acc2)">–</span>
+        <div class="bar"><div class="bar-fill orange" data-field="load_bar"></div></div>
+      </div>
+      <div class="fg-item">
+        <span class="fg-key">Battery</span>
+        <span class="fg-val tabular" data-field="battery_pct" style="font-family:var(--fdisplay);font-size:22px;letter-spacing:1px;color:var(--acc3)">–</span>
+        <div class="bar"><div class="bar-fill green" data-field="batt_bar"></div></div>
+      </div>
+      <div class="fg-item">
+        <span class="fg-key">Runtime</span>
+        <span class="fg-val tabular" data-field="runtime" style="font-family:var(--fdisplay);font-size:22px;letter-spacing:1px">–</span>
+      </div>
+    </div>
+
+    <div class="panel-hdr" style="margin-top:4px;margin-bottom:6px;padding-bottom:6px">
+      <span class="panel-title">Line Voltage — last 60 samples</span>
+      <span class="panel-title tabular" data-field="spark-range" style="color:var(--txt3)">–</span>
+    </div>
+    <div class="spark-wrap"><canvas data-field="spark"></canvas></div>
+
+    <div class="fg-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">
+      <div class="fg-item"><span class="fg-key">batt V</span><span class="fg-val tabular" data-field="batt_v">–</span></div>
+      <div class="fg-item"><span class="fg-key">nominal W</span><span class="fg-val tabular" data-field="nom_w">–</span></div>
+      <div class="fg-item"><span class="fg-key">xfers</span><span class="fg-val tabular" data-field="xfers">–</span></div>
+    </div>
+
+    <div style="margin-top:10px;font-size:9.5px;color:var(--txt3);letter-spacing:1px">
+      <span data-field="lastxfer">last transfer: –</span>
+    </div>
+  `;
+
+  $('ups-grid').appendChild(panel);
+  return panel;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderUPS(name, data) {
+  const panel = ensurePanel(name);
+
+  // Status class on the panel wrapper
+  panel.classList.remove('alert-batt', 'alert-low', 'stale');
+  const st = (data.status || '').toUpperCase();
+
+  const badge = panel.querySelector('[data-field="status-badge"]');
+  badge.className = 'panel-badge';
+  if (st.includes('COMMLOST')) {
+    badge.classList.add('err');  badge.textContent = 'COMM LOST';
+    panel.classList.add('alert-low');
+  } else if (st.includes('LOWBATT')) {
+    badge.classList.add('err');  badge.textContent = 'LOW BATTERY';
+    panel.classList.add('alert-low');
+  } else if (st.includes('ONBATT')) {
+    badge.classList.add('warn'); badge.textContent = 'ON BATTERY';
+    panel.classList.add('alert-batt');
+  } else if (st.includes('ONLINE')) {
+    badge.classList.add('live'); badge.textContent = 'ONLINE';
+  } else {
+    badge.classList.add('warn'); badge.textContent = st || 'UNKNOWN';
+  }
+
+  // Field updates — null-safe
+  const set = (field, val) => {
+    const n = panel.querySelector(`[data-field="${field}"]`);
+    if (n) n.textContent = (val === null || val === undefined || val === '') ? '–' : val;
+  };
+  const setBar = (field, pct) => {
+    const n = panel.querySelector(`[data-field="${field}"]`);
+    if (n) n.style.width = `${Math.max(0, Math.min(100, pct || 0))}%`;
+  };
+
+  set('model',      data.model);
+  set('serial',     data.serial);
+  set('firmware',   data.firmware);
+  set('line_v',     data.line_v != null ? `${data.line_v.toFixed(1)} V` : null);
+  set('load_pct',   data.load_pct != null ? `${data.load_pct.toFixed(0)}%` : null);
+  set('battery_pct',data.battery_pct != null ? `${data.battery_pct.toFixed(0)}%` : null);
+  set('runtime',    data.runtime_min != null ? `${data.runtime_min.toFixed(0)}m` : null);
+  set('batt_v',     data.battery_v != null ? `${data.battery_v.toFixed(2)} V` : null);
+  set('nom_w',      data.nominal_power_w != null ? `${data.nominal_power_w} W` : null);
+  set('xfers',      data.num_xfers);
+  set('lastxfer',   data.last_xfer_reason ? `last transfer: ${data.last_xfer_reason}` : 'last transfer: –');
+
+  setBar('load_bar', data.load_pct);
+  setBar('batt_bar', data.battery_pct);
+
+  // Sparkline
+  if (data.line_v != null) {
+    let arr = state.sparks.get(name) || [];
+    arr.push(data.line_v);
+    if (arr.length > 60) arr = arr.slice(-60);
+    state.sparks.set(name, arr);
+
+    drawSpark(panel.querySelector('canvas[data-field="spark"]'), arr);
+
+    if (arr.length > 1) {
+      const lo = Math.min(...arr), hi = Math.max(...arr);
+      set('spark-range', `${lo.toFixed(1)} – ${hi.toFixed(1)} V`);
+    }
+  }
+}
+
+/* ---------- sparkline canvas drawing -------------------------------- */
+function drawSpark(canvas, samples) {
+  if (!canvas || !samples || samples.length === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth, H = canvas.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, W, H);
+
+  // Read theme tokens at draw time so re-skins are live
+  const cs = getComputedStyle(document.documentElement);
+  const acc  = cs.getPropertyValue('--acc').trim()  || '#00d4ff';
+  const txt3 = cs.getPropertyValue('--txt3').trim() || '#4444aa';
+
+  // Nominal line reference (120V in US, 230 in EU). Infer from data range.
+  const mid = (Math.min(...samples) + Math.max(...samples)) / 2;
+  const nominal = mid > 180 ? 230 : 120;
+
+  const lo = Math.min(nominal - 5, Math.min(...samples) - 1);
+  const hi = Math.max(nominal + 5, Math.max(...samples) + 1);
+  const range = Math.max(1, hi - lo);
+
+  const xOf = i => (i / Math.max(1, samples.length - 1)) * W;
+  const yOf = v => H - ((v - lo) / range) * H;
+
+  // Reference line at nominal
+  ctx.strokeStyle = txt3;
+  ctx.globalAlpha = 0.4;
+  ctx.setLineDash([2, 4]);
+  ctx.beginPath();
+  ctx.moveTo(0, yOf(nominal));
+  ctx.lineTo(W, yOf(nominal));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // Data line
+  ctx.strokeStyle = acc;
+  ctx.lineWidth = 1.25;
+  ctx.beginPath();
+  samples.forEach((v, i) => {
+    const x = xOf(i), y = yOf(v);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Fill below
+  ctx.lineTo(W, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fillStyle = acc;
+  ctx.globalAlpha = 0.08;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Latest point emphasis
+  const lastX = xOf(samples.length - 1);
+  const lastY = yOf(samples[samples.length - 1]);
+  ctx.fillStyle = acc;
+  ctx.beginPath();
+  ctx.arc(lastX, lastY, 2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/* ---------- fleet summary refresh ----------------------------------- */
+function refreshSummary() {
+  let total = 0, online = 0, onbatt = 0, alert = 0;
+  for (const [, d] of state.ups) {
+    total += 1;
+    const s = (d.status || '').toUpperCase();
+    if (s.includes('LOWBATT') || s.includes('COMMLOST')) alert += 1;
+    else if (s.includes('ONBATT')) onbatt += 1;
+    else if (s.includes('ONLINE')) online += 1;
+  }
+  $('m-count').textContent  = total;
+  $('m-online').textContent = online;
+  $('m-onbatt').textContent = onbatt;
+  $('m-alert').textContent  = alert;
+}
+
+/* ---------- MQTT wiring --------------------------------------------- */
+function connect() {
+  const clientId = 'gorilla-web-' + Math.random().toString(36).slice(2, 10);
+  const client = new Paho.MQTT.Client(CONFIG.broker, CONFIG.port, '/mqtt', clientId);
+  state.client = client;
+
+  $('h-broker').textContent = `${CONFIG.broker}:${CONFIG.port}`;
+  $('h-host').textContent   = location.hostname || 'localhost';
+  $('h-topic').textContent  = `${CONFIG.prefix}/#`;
+
+  client.onConnectionLost = (resp) => {
+    setConn('down', 'DISCONNECTED');
+    logLine('system', `connection lost: ${resp.errorMessage || 'unknown'}`, 'err');
+    // Reconnect after 3s
+    setTimeout(connect, 3000);
+  };
+
+  client.onMessageArrived = (m) => {
+    handleMessage(m.destinationName, m.payloadString);
+  };
+
+  setConn('connecting', 'CONNECTING');
+  logLine('system', `connecting to ws://${CONFIG.broker}:${CONFIG.port}`);
+
+  client.connect({
+    timeout: 5,
+    keepAliveInterval: 30,
+    cleanSession: true,
+    onSuccess: () => {
+      state.connectedAt = Date.now();
+      setConn('up', 'CONNECTED');
+      logLine('system', `subscribed to ${CONFIG.prefix}/#`, 'ok');
+      client.subscribe(`${CONFIG.prefix}/#`);
+    },
+    onFailure: (err) => {
+      setConn('down', 'CONNECT FAILED');
+      logLine('system', `connect failed: ${err.errorMessage || err}`, 'err');
+      setTimeout(connect, 3000);
+    },
+  });
+}
+
+function handleMessage(topic, payload) {
+  state.msgCount += 1;
+  state.msgRate += 1;
+  state.lastMsgAt = Date.now();
+  $('h-lastmsg').textContent = new Date().toTimeString().slice(0, 8);
+
+  // Topics: ups/<name>/state | alert | error | available
+  const parts = topic.split('/');
+  if (parts.length < 3 || parts[0] !== CONFIG.prefix) return;
+  const name = parts[1];
+  const kind = parts[2];
+
+  if (name === '_bridge') {
+    if (kind === 'available') {
+      const online = payload === 'online';
+      $('host-badge').className = 'panel-badge ' + (online ? 'live' : 'err');
+      $('host-badge').textContent = online ? 'ONLINE' : 'OFFLINE';
+      logLine('bridge', `bridge ${payload}`, online ? 'ok' : 'err');
+    }
+    return;
+  }
+
+  if (kind === 'state') {
+    try {
+      const data = JSON.parse(payload);
+      data._received = Date.now();
+      state.ups.set(name, data);
+      renderUPS(name, data);
+      refreshSummary();
+    } catch (e) {
+      logLine(name, `bad json: ${e.message}`, 'err');
+    }
+  } else if (kind === 'alert') {
+    try {
+      const a = JSON.parse(payload);
+      logLine(name, `status ${a.from || '?'} → ${a.to || '?'}`, 'warn');
+    } catch {
+      logLine(name, `alert: ${payload}`, 'warn');
+    }
+  } else if (kind === 'error') {
+    logLine(name, `error: ${payload}`, 'err');
+  } else if (kind === 'available') {
+    logLine(name, `availability: ${payload}`, payload === 'online' ? 'ok' : 'warn');
+  }
+}
+
+/* ---------- lab command interface ----------------------------------- */
+function runCmd(line) {
+  const out = $('cmd-out');
+  out.className = 'cmd-out';
+  const parts = line.trim().split(/\s+/);
+
+  if (parts[0] === 'clear') {
+    $('log').innerHTML = '';
+    out.textContent = 'log cleared.';
+    out.className = 'cmd-out ok';
+    return;
+  }
+
+  if (parts[0] === 'sim' && parts.length === 3) {
+    const [, name, target] = parts;
+    const existing = state.ups.get(name) || {
+      model: 'Smart-UPS (simulated)',
+      serial: 'SIM0000000000',
+      firmware: 'sim.1',
+      line_v: 120.0,
+      load_pct: 22,
+      battery_pct: 100,
+      battery_v: 27.0,
+      nominal_power_w: 900,
+      runtime_min: 45,
+      num_xfers: 0,
+      last_xfer_reason: 'No transfers since turnon',
+    };
+    existing._received = Date.now();
+
+    if (target === 'onbatt') {
+      existing.status = 'ONBATT';
+      existing.line_v = 0;
+      existing.last_xfer_reason = 'Simulated line loss';
+      existing.num_xfers = (existing.num_xfers || 0) + 1;
+    } else if (target === 'online') {
+      existing.status = 'ONLINE';
+      existing.line_v = 120.0;
+    } else if (target === 'lowbatt') {
+      existing.status = 'ONBATT LOWBATT';
+      existing.battery_pct = 8;
+      existing.runtime_min = 2;
+      existing.line_v = 0;
+    } else {
+      out.textContent = `unknown target: ${target}`;
+      out.className = 'cmd-out err';
+      return;
+    }
+
+    state.ups.set(name, existing);
+    renderUPS(name, existing);
+    refreshSummary();
+    logLine(name, `[SIM] forced to ${target}`, 'warn');
+    out.textContent = `simulated: ${name} → ${target}`;
+    out.className = 'cmd-out ok';
+    return;
+  }
+
+  out.textContent = `unrecognized: ${line}`;
+  out.className = 'cmd-out err';
+}
+
+$('cmd-btn').addEventListener('click', () => {
+  const v = $('cmd').value;
+  if (v) runCmd(v);
+  $('cmd').value = '';
+});
+$('cmd').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('cmd-btn').click();
+});
+
+/* ---------- go ------------------------------------------------------ */
+connect();
+</script>
+
+</body>
+</html>
