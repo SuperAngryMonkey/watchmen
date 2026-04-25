@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+env/
+venv/
+.venv/
+
+# Local secrets / overrides
+*.local.conf
+*.secret
+.env
+.env.local
+
+# Pi OS / runtime artifacts that shouldn't be committed
+*.events
+*.status
+*.pid
+LCK..apcupsd*
+
+# Editor cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build / package artifacts
+*.tar.gz
+*.deb
+dist/
+build/
+
+# Local testing
+test-output/
+characterizations/
+*.log
