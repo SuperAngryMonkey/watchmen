@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.3.0-lxc — 2026-04-30 — LXC deployment variant
+
+Added unprivileged Proxmox LXC deployment as a parallel target to the
+Raspberry Pi installation. Same code, same MQTT contract, same dashboard;
+different deployment surface.
+
+### What's new
+
+- `install-lxc.sh` — container-side install, parallel to `install.sh` for Pi
+- `deploy-lxc.sh` — laptop-side deploy that uses `pct push` / `pct exec`
+  rather than direct SSH to the container
+- `HOST-SIDE-SETUP.md` — Proxmox-host configuration walkthrough:
+  udev rule for device ownership in mapped UID range, `lxc.cgroup2.devices.allow`
+  rules, `lxc.mount.entry` lines for hiddev nodes
+- `udev/` renamed to `udev-host-side/` to clarify the rule belongs on the
+  host, not inside the container
+
+### Why unprivileged LXC
+
+Defense in depth. A container compromise in privileged mode means root on
+the host; unprivileged means uid 100000 with no host privileges. The
+container-side install is identical regardless — only the host-side USB
+passthrough needs adjustment. One-time setup per Proxmox host, covers all
+current and future APC UPSs.
+
+### Branch strategy
+
+This is on the `lxc-deployment` branch, branched from `main` at v0.2.1.
+The Pi `install.sh` / `deploy.sh` / `udev/` paths are preserved unchanged
+for users still deploying to Raspberry Pis. Once the LXC variant is
+field-tested against a real Proxmox UPS deployment, the branches can
+either be merged (with platform detection in a single installer) or kept
+separate as parallel deployment targets.
+
 ## v0.2.1 — 2026-04-25 — Renamed to `watchmen`
 
 Rebranded from `gorilla-power` to `watchmen`. Functionally identical to v0.2.0;

@@ -99,6 +99,12 @@ faster without paying a fork-exec cost.
 |----|-----|------|-------|
 | Pi 3B | Pi OS Lite Trixie | Back-UPS XS 1500G (FW 866.L8.D) | 940-0127B (RJ50→USB) |
 
+### Also tested
+
+| Platform | OS | Notes |
+|----------|-----|-------|
+| Proxmox 8 unprivileged LXC | Debian 12 (Bookworm) | USB-HID passthrough via host udev + lxc.mount.entry — see HOST-SIDE-SETUP.md |
+
 ---
 
 ## Software stack
@@ -170,6 +176,46 @@ curl -I http://localhost:8080/
 ```
 
 Open the dashboard: **http://&lt;pi-ip&gt;:8080/**
+
+---
+
+## Deploying to an LXC container instead of a Pi
+
+This branch (`lxc-deployment`) targets unprivileged Debian LXC containers
+running on Proxmox, with USB-HID devices passed through from the host.
+
+The container-side install is similar (apcupsd + mosquitto + bridge +
+dashboard), but the host-side USB passthrough requires Proxmox-level
+configuration that has to happen **before** running the container install.
+
+```bash
+# 1. On the Proxmox host, configure USB passthrough — see HOST-SIDE-SETUP.md
+#    (one-time setup per Proxmox host, covers all current and future APCs)
+
+# 2. From your laptop, deploy:
+PVE_HOST=proxmox.local CT_ID=200 ./deploy-lxc.sh
+
+# 3. Inside the container, start the daemons:
+pct enter 200
+find-apc-serials
+systemctl enable --now apcupsd@lab1 apc-mqtt-bridge watchmen-web
+```
+
+**See [HOST-SIDE-SETUP.md](HOST-SIDE-SETUP.md)** for the full Proxmox-side
+configuration (udev rule for device ownership, LXC config entries for
+device passthrough, troubleshooting). That doc is the critical piece —
+the container can't read UPSs without it.
+
+The LXC variant uses different scripts:
+
+- `install-lxc.sh` — runs **inside** the container
+- `deploy-lxc.sh` — runs from your **laptop**, uses `pct push`/`pct exec`
+- `udev-host-side/99-apc-ups.rules` — informational only; the real
+  host-side udev rule lives in HOST-SIDE-SETUP.md
+
+The Pi-targeted `install.sh` and `deploy.sh` are **not used** in LXC
+deployments. Same systemd units, same configs, same bridge — different
+deployment surface.
 
 ---
 
