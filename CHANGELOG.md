@@ -34,6 +34,45 @@ field-tested against a real Proxmox UPS deployment, the branches can
 either be merged (with platform detection in a single installer) or kept
 separate as parallel deployment targets.
 
+## v0.2.2 — 2026-05-02 — Client and site labels in dashboard header
+
+When you start deploying watchmen to multiple sites, looking at "WATCHMEN"
+on every dashboard tells you nothing about *which* deployment you're looking
+at. This release adds configurable client and site labels in the header.
+
+### What's new
+
+- Dashboard header now shows `WATCHMEN // Power Monitor // <client name>`
+  with the site/location underneath, replacing the generic "APC UPS Fleet //
+  Lab" placeholder
+- Browser tab title updates to `WATCHMEN // <client name>` so you can find
+  the right tab when juggling multiple deployments
+- Three ways to set the labels:
+  1. **Interactive prompt during `./install.sh`** or `./install-lxc.sh` —
+     the installer asks for client and site names and bakes them in
+  2. **Environment variables during install** — set `WATCHMEN_CLIENT` and
+     `WATCHMEN_SITE` for non-interactive deploys
+  3. **Query string** at view time — `?client=Acme&site=Rack%202` overrides
+     for one-off testing
+- New helper script `watchmen-set-client` lets you change labels on a
+  deployed dashboard without reinstalling:
+  ```
+  sudo watchmen-set-client "Pat Gallager" "Surfside 6H"
+  ```
+
+### Why this matters
+
+Visual identification of deployment context is the difference between
+"which dashboard is this?" and "this is clearly Acme's." When you eventually
+have five customers and your own house all running watchmen, the header
+label is the first thing your eye lands on.
+
+### Backward compatibility
+
+Existing deployments keep working unchanged — the JS gracefully handles the
+case where the placeholders weren't substituted (falls back to "APC UPS
+Fleet" and `location.hostname`).
+
 ## v0.2.1 — 2026-04-25 — Renamed to `watchmen`
 
 Rebranded from `gorilla-power` to `watchmen`. Functionally identical to v0.2.0;

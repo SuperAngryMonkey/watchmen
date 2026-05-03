@@ -47,6 +47,7 @@ install -m 0755 "$HERE/bridge/apc-mqtt-bridge.py" /usr/local/bin/
 echo "==> Installing helper scripts..."
 install -m 0755 "$HERE/scripts/find-apc-serials.sh" /usr/local/bin/find-apc-serials
 install -m 0755 "$HERE/scripts/characterize.sh"     /usr/local/bin/apc-characterize
+install -m 0755 "$HERE/scripts/set-client.sh"       /usr/local/bin/watchmen-set-client
 
 echo "==> Installing mosquitto WebSocket listener..."
 install -d /etc/mosquitto/conf.d
@@ -57,6 +58,37 @@ install -d /var/lib/watchmen-web
 install -m 0644 "$HERE/web/index.html"        /var/lib/watchmen-web/
 install -m 0644 "$HERE/web/monkey-theme.css"  /var/lib/watchmen-web/
 install -m 0644 "$HERE/systemd/watchmen-web.service" /etc/systemd/system/
+
+# Customize dashboard with client/site labels.
+# Uses WATCHMEN_CLIENT and WATCHMEN_SITE env vars if set, otherwise prompts.
+# Skips entirely (leaves placeholders) if running non-interactively without env.
+echo "==> Configuring dashboard labels..."
+if [ -n "${WATCHMEN_CLIENT:-}" ]; then
+    client_name="$WATCHMEN_CLIENT"
+elif [ -t 0 ]; then
+    read -p "    Client name (e.g. 'Acme Corp', 'Lab', 'Pat Gallager'): " client_name
+else
+    client_name=""
+fi
+
+if [ -n "${WATCHMEN_SITE:-}" ]; then
+    site_name="$WATCHMEN_SITE"
+elif [ -t 0 ]; then
+    read -p "    Site/location (e.g. 'Fort Lauderdale', 'Rack 1', 'Surfside 6H'): " site_name
+else
+    site_name=""
+fi
+
+# Default values if user pressed Enter without typing
+client_name="${client_name:-APC UPS Fleet}"
+site_name="${site_name:-$(hostname)}"
+
+# sed-substitute the placeholders in the installed copy
+sed -i "s|__CLIENT_NAME__|$(printf '%s' "$client_name" | sed 's/[\\&|]/\\&/g')|g" /var/lib/watchmen-web/index.html
+sed -i "s|__SITE_NAME__|$(printf '%s' "$site_name"   | sed 's/[\\&|]/\\&/g')|g" /var/lib/watchmen-web/index.html
+
+echo "    Client: $client_name"
+echo "    Site:   $site_name"
 
 echo "==> Enabling + restarting mosquitto..."
 systemctl enable --now mosquitto
