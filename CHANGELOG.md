@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.2.3 — 2026-05-02 — Config page (gear icon)
+
+A gear icon in the dashboard header now opens a config modal where you can
+edit settings without SSHing in.
+
+### What's new
+
+- **Gear icon** top-right of header, next to the clock
+- **Modal opens** with form fields for the configurable settings:
+  - Client name and site/location
+  - MQTT broker host and WebSocket port
+  - Topic prefix
+  - Stale threshold (seconds)
+- **Settings persist in browser localStorage** under `watchmen.config.v1`
+- **Each browser remembers its own settings** — your Mac saves them once,
+  future visits load them automatically
+- **Reset button** clears everything back to install-time defaults
+- **Modal closes** on Save, Cancel, ESC key, or click outside the panel
+- **Save reloads the page** so broker/topic changes take effect cleanly
+
+### Resolution order
+
+For any single setting, watchmen now checks (highest priority first):
+
+1. **localStorage** — saved via gear icon
+2. **Query string** — `?broker=foo&client=bar` for one-off testing
+3. **HTML install-time values** — `__CLIENT_NAME__` replaced by `install.sh`
+4. **Hardcoded defaults**
+
+This means you can override per-browser without touching the install, and
+override per-visit without touching localStorage. Three independent layers.
+
+### Why localStorage instead of server-side
+
+This is the v1 shape: per-browser state, no backend, no auth, no new service.
+The watchmen-web HTTP server stays a static-file server. When you eventually
+need fleet-wide shared settings (different operators seeing the same client
+label) or an audit trail, the storage layer can swap to a server-side JSON
+file or MQTT retained topic — the UI doesn't change.
+
+### Backward compatibility
+
+Existing deployments keep working unchanged. localStorage starts empty, so
+on first load the dashboard falls through to the install-time HTML values
+(or defaults if those weren't substituted). No migration needed.
+
 ## v0.2.2 — 2026-05-02 — Client and site labels in dashboard header
 
 When you start deploying watchmen to multiple sites, looking at "WATCHMEN"
