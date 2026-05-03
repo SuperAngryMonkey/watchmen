@@ -34,6 +34,40 @@ field-tested against a real Proxmox UPS deployment, the branches can
 either be merged (with platform detection in a single installer) or kept
 separate as parallel deployment targets.
 
+## v0.2.3 — 2026-05-02 — Config page (gear icon)
+
+A gear icon in the dashboard header now opens a config modal where you can
+edit settings without SSHing in or running watchmen-set-client.
+
+### What's new
+
+- Gear icon top-right of header, next to the clock
+- Modal with form fields for client name, site, MQTT broker host/port,
+  topic prefix, and stale threshold
+- Settings persist in browser localStorage (`watchmen.config.v1`)
+- Reset button clears everything back to install-time defaults
+- Save reloads the page so broker/topic changes take effect cleanly
+
+### Resolution order
+
+Settings now resolve through four layers (highest priority first):
+
+1. localStorage (saved via gear icon)
+2. Query string (`?broker=`, `?client=` etc.)
+3. HTML install-time values (`__CLIENT_NAME__` replaced by install)
+4. Hardcoded defaults
+
+Each layer is independent — you can override per-visit via query string
+without touching localStorage, or per-browser via gear icon without
+touching the installed HTML.
+
+### Why localStorage
+
+v1 shape: per-browser state, no backend, no auth, no new service. The
+watchmen-web HTTP server stays a static-file server. When you eventually
+need fleet-wide shared settings, the storage layer swaps to a server-side
+JSON file or MQTT retained topic; the UI doesn't change.
+
 ## v0.2.2 — 2026-05-02 — Client and site labels in dashboard header
 
 When you start deploying watchmen to multiple sites, looking at "WATCHMEN"
