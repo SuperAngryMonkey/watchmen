@@ -104,8 +104,8 @@
   <div class="hdr-left">
     <div class="logo">WATCHMEN</div>
     <div>
-      <div class="subtitle">Power Monitor // APC UPS Fleet</div>
-      <div class="subtitle" style="margin-top:3px;color:var(--txt3)">UPS Fleet // Lab</div>
+      <div class="subtitle">Power Monitor // <span id="client-name">__CLIENT_NAME__</span></div>
+      <div class="subtitle" style="margin-top:3px;color:var(--txt3)" id="site-name">__SITE_NAME__</div>
     </div>
   </div>
   <div class="hdr-right">
@@ -226,12 +226,40 @@ const CONFIG = {
   // When the page is served FROM the Pi, location.hostname wins and we
   // connect to whichever host the page came from — works over Tailscale too.
   // Otherwise fall back to the known-good lab IP.
-  // Override via querystring: ?broker=10.0.0.5&port=9001&prefix=ups
+  // Override via querystring: ?broker=10.0.0.5&port=9001&prefix=ups&client=Name&site=Subname
   broker:  new URLSearchParams(location.search).get('broker') || location.hostname || '<pi-lan-ip>',
   port:    parseInt(new URLSearchParams(location.search).get('port') || '9001', 10),
   prefix:  new URLSearchParams(location.search).get('prefix') || 'ups',
   staleAfterMs: 90 * 1000,   // mark a UPS stale if no update within this
 };
+
+// ---------- Client/site labeling ---------------------------------------
+// Set during install.sh via sed-replacement of __CLIENT_NAME__ and __SITE_NAME__
+// in the HTML markup above. Query string overrides for one-off testing.
+// If neither install nor query string set them, falls back to friendly defaults.
+(function applyClientLabels() {
+  const params = new URLSearchParams(location.search);
+  const clientEl = document.getElementById('client-name');
+  const siteEl   = document.getElementById('site-name');
+
+  let client = params.get('client');
+  if (!client && clientEl && !clientEl.textContent.includes('__')) {
+    client = clientEl.textContent;  // install-time value
+  }
+  if (!client) client = 'APC UPS Fleet';
+
+  let site = params.get('site');
+  if (!site && siteEl && !siteEl.textContent.includes('__')) {
+    site = siteEl.textContent;  // install-time value
+  }
+  if (!site) site = location.hostname || 'Lab';
+
+  if (clientEl) clientEl.textContent = client;
+  if (siteEl)   siteEl.textContent   = site;
+
+  // Update browser tab title to match
+  document.title = `WATCHMEN // ${client}`;
+})();
 
 /* ---------- state --------------------------------------------------- */
 const state = {

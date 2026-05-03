@@ -335,8 +335,32 @@ broker:
 http://your-pi:8080/?broker=<pi-lan-ip>&port=9001&prefix=ups
 ```
 
+You can also override the client and site labels at view time:
+
+```
+http://your-pi:8080/?client=Acme%20Corp&site=Rack%202
+```
+
 Defaults to `location.hostname` so opening the dashboard on the Pi itself
 "just works." Falls back to `<pi-lan-ip>` if neither is available.
+
+### Client and site labels
+
+The dashboard header shows a configurable `client` and `site` label so you
+can tell at a glance which deployment you're looking at. Set during install
+with the prompts, or update later without reinstalling:
+
+```bash
+sudo watchmen-set-client "Pat Gallager" "Surfside 6H"
+```
+
+Or run it without arguments for an interactive prompt that shows current
+values first. Or set non-interactively via environment variables during
+install:
+
+```bash
+WATCHMEN_CLIENT="Acme Corp" WATCHMEN_SITE="Rack 2" sudo ./install.sh
+```
 
 ### Theme
 
