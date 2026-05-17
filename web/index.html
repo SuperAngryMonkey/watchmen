@@ -674,6 +674,16 @@ function renderUPS(name, data) {
   } else if (st.includes('LOWBATT')) {
     badge.classList.add('err');  badge.textContent = 'LOW BATTERY';
     panel.classList.add('alert-low');
+  } else if (st.includes('NOBATT') || st.includes('REPLACEBATT')) {
+    // UPS reports no battery / battery needs replacement — it will NOT
+    // provide backup power if mains fails. Surface this loudly even if
+    // status also says ONLINE, because the ONLINE part is misleading.
+    badge.classList.add('err');
+    badge.textContent = st.includes('NOBATT') ? 'NO BATTERY' : 'REPLACE BATTERY';
+    panel.classList.add('alert-low');
+  } else if (st.includes('OVERLOAD')) {
+    badge.classList.add('err');  badge.textContent = 'OVERLOAD';
+    panel.classList.add('alert-low');
   } else if (st.includes('ONBATT')) {
     badge.classList.add('warn'); badge.textContent = 'ON BATTERY';
     panel.classList.add('alert-batt');
@@ -796,9 +806,15 @@ function refreshSummary() {
   for (const [, d] of state.ups) {
     total += 1;
     const s = (d.status || '').toUpperCase();
-    if (s.includes('LOWBATT') || s.includes('COMMLOST')) alert += 1;
-    else if (s.includes('ONBATT')) onbatt += 1;
-    else if (s.includes('ONLINE')) online += 1;
+    if (s.includes('LOWBATT') || s.includes('COMMLOST') ||
+        s.includes('NOBATT') || s.includes('REPLACEBATT') ||
+        s.includes('OVERLOAD')) {
+      alert += 1;
+    } else if (s.includes('ONBATT')) {
+      onbatt += 1;
+    } else if (s.includes('ONLINE')) {
+      online += 1;
+    }
   }
   $('m-count').textContent  = total;
   $('m-online').textContent = online;
@@ -937,6 +953,15 @@ function runCmd(line) {
       existing.battery_pct = 8;
       existing.runtime_min = 2;
       existing.line_v = 0;
+    } else if (target === 'nobatt') {
+      existing.status = 'ONLINE NOBATT';
+      existing.line_v = 120.0;
+    } else if (target === 'replacebatt') {
+      existing.status = 'ONLINE REPLACEBATT';
+      existing.line_v = 120.0;
+    } else if (target === 'overload') {
+      existing.status = 'ONLINE OVERLOAD';
+      existing.load_pct = 105;
     } else {
       out.textContent = `unknown target: ${target}`;
       out.className = 'cmd-out err';
