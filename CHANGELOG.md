@@ -34,6 +34,21 @@ field-tested against a real Proxmox UPS deployment, the branches can
 either be merged (with platform detection in a single installer) or kept
 separate as parallel deployment targets.
 
+## v0.2.4 — 2026-05-17 — Surface NOBATT / REPLACEBATT / OVERLOAD
+
+The dashboard was silently dropping critical status modifiers. A UPS
+reporting `ONLINE NOBATT` was being rendered as a healthy green "ONLINE"
+badge, hiding that it will not provide backup power when mains fails.
+
+Status badge priority now puts NOBATT, REPLACEBATT, and OVERLOAD ahead of
+the bare ONLINE check, all rendered with red badges. Fleet summary updated
+to count these as alerts.
+
+New simulator commands: `sim labN nobatt`, `sim labN replacebatt`,
+`sim labN overload` for testing without unplugging hardware.
+
+See main branch CHANGELOG for full rationale.
+
 ## v0.2.3 — 2026-05-02 — Config page (gear icon)
 
 A gear icon in the dashboard header now opens a config modal where you can
