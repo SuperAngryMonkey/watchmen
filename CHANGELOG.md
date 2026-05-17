@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.2.4 — 2026-05-17 — Surface NOBATT / REPLACEBATT / OVERLOAD
+
+The dashboard was silently dropping critical status modifiers. A UPS
+reporting `ONLINE NOBATT` was being rendered as a healthy green
+"ONLINE" badge — hiding the fact that the UPS would not actually
+provide backup power when mains fails.
+
+Caught in the field when adding a second UPS (a Back-UPS ES 600G with
+a dead battery) to a working watchmen deployment. The user explicitly
+said he wanted watchmen working so he could detect a dead battery. The
+dashboard's first job is to surface conditions that make the UPS
+useless. Silent fall-through to "ONLINE" was the worst possible failure
+mode.
+
+### What changed
+
+Status badge priority is now (highest first):
+
+| Status flag | Badge | Color |
+|---|---|---|
+| `COMMLOST` | COMM LOST | red |
+| `LOWBATT` | LOW BATTERY | red |
+| `NOBATT` | NO BATTERY | **red (new)** |
+| `REPLACEBATT` | REPLACE BATTERY | **red (new)** |
+| `OVERLOAD` | OVERLOAD | **red (new)** |
+| `ONBATT` | ON BATTERY | amber |
+| `ONLINE` | ONLINE | green |
+
+Fleet summary counter (top of dashboard) updated to count any of the
+red-badge conditions as "alert" instead of "online."
+
+### New simulator commands
+
+```
+sim lab1 nobatt
+sim lab1 replacebatt
+sim lab1 overload
+```
+
+For testing the new badges without unplugging hardware.
+
+### Why this matters
+
+A UPS reporting NOBATT is broadcasting its own uselessness. Same for
+REPLACEBATT (battery so degraded it needs replacement) and OVERLOAD
+(load exceeds capacity, will trip when on battery). These are exactly
+the conditions a monitoring dashboard exists to detect. Surfacing them
+in the same red-alert prominence as COMMLOST is the right shape.
+
 ## v0.2.3 — 2026-05-02 — Config page (gear icon)
 
 A gear icon in the dashboard header now opens a config modal where you can
